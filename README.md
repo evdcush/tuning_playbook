@@ -11,36 +11,78 @@
 
 ## Table of Contents
 
--   [Who is this document for?](#who-is-this-document-for)
--   [Why a tuning playbook?](#why-a-tuning-playbook)
--   [Guide for starting a new project](#guide-for-starting-a-new-project)
-    -   [Choosing the model architecture](#choosing-a-model-architecture)
-    -   [Choosing the optimizer](#choosing-the-optimizer)
-    -   [Choosing the batch size](#choosing-the-batch-size)
-    -   [Choosing the initial configuration](#choosing-the-initial-configuration)
--   [A scientific approach to improving model performance](#a-scientific-approach-to-improving-model-performance)
-    -   [The incremental tuning strategy](#the-incremental-tuning-strategy)
-    -   [Exploration vs exploitation](#exploration-vs-exploitation)
-    -   [Choosing the goal for the next round of experiments](#choosing-the-goal-for-the-next-round-of-experiments)
-    -   [Designing the next round of experiments](#Designing-the-next-round-of-experiments)
-    -   [Determining whether to adopt a training pipeline change or
-        hyperparameter
-        configuration](#Determining-whether-to-adopt-a-training-pipeline-change-or-hyperparameter-configuration)
-    -   [After exploration concludes](#After-exploration-concludes)
--   [Determining the number of steps for each training run](#Determining-the-number-of-steps-for-each-training-run)
-    -   [Deciding how long to train when training is not compute-bound](#Deciding-how-long-to-train-when-training-is-not-compute-bound)
-    -   [Deciding how long to train when training is compute-bound](#Deciding-how-long-to-train-when-training-is-compute-bound)
--   [Additional guidance for the training pipeline](#Additional-guidance-for-the-training-pipeline)
-    -   [Optimizing the input pipeline](#Optimizing-the-input-pipeline)
-    -   [Evaluating model performance](Evaluating-model-performance)
-    -   [Saving checkpoints and retrospectively selecting the best checkpoint](#Saving-checkpoints-and-retrospectively-selecting-the-best-checkpoint)
-    -   [Setting up experiment tracking](#Setting-up-experiment-tracking)
-    -   [Batch normalization implementation details](#Batch-normalization-implementation-details)
-    -   [Considerations for multi-host pipelines](#Considerations-for-multi-host-pipelines)
--   [FAQs](#faqs)
--   [Acknowledgments](#acknowledgments)
--   [Citing](#citing)
--   [Contributing](#contributing)
+- [Deep Learning Tuning Playbook](#deep-learning-tuning-playbook)
+  - [Table of Contents](#table-of-contents)
+  - [Who is this document for?](#who-is-this-document-for)
+  - [Why a tuning playbook?](#why-a-tuning-playbook)
+  - [Guide for starting a new project](#guide-for-starting-a-new-project)
+    - [Choosing the model architecture](#choosing-the-model-architecture)
+    - [Choosing the optimizer](#choosing-the-optimizer)
+    - [Choosing the batch size](#choosing-the-batch-size)
+      - [Determining the feasible batch sizes and estimating training throughput](#determining-the-feasible-batch-sizes-and-estimating-training-throughput)
+      - [Choosing the batch size to minimize training time](#choosing-the-batch-size-to-minimize-training-time)
+      - [Choosing the batch size to minimize resource consumption](#choosing-the-batch-size-to-minimize-resource-consumption)
+      - [Changing the batch size requires re-tuning most hyperparameters](#changing-the-batch-size-requires-re-tuning-most-hyperparameters)
+      - [How batch norm interacts with the batch size](#how-batch-norm-interacts-with-the-batch-size)
+    - [Choosing the initial configuration](#choosing-the-initial-configuration)
+  - [A scientific approach to improving model performance](#a-scientific-approach-to-improving-model-performance)
+    - [The incremental tuning strategy](#the-incremental-tuning-strategy)
+    - [Exploration vs exploitation](#exploration-vs-exploitation)
+    - [Choosing the goal for the next round of experiments](#choosing-the-goal-for-the-next-round-of-experiments)
+    - [Designing the next round of experiments](#designing-the-next-round-of-experiments)
+      - [Identifying scientific, nuisance, and fixed hyperparameters](#identifying-scientific-nuisance-and-fixed-hyperparameters)
+      - [Creating a set of studies](#creating-a-set-of-studies)
+      - [Striking a balance between informative and affordable experiments](#striking-a-balance-between-informative-and-affordable-experiments)
+    - [Extracting insight from experimental results](#extracting-insight-from-experimental-results)
+      - [Identifying bad search space boundaries](#identifying-bad-search-space-boundaries)
+      - [Not sampling enough points in the search space](#not-sampling-enough-points-in-the-search-space)
+      - [Examining the training curves](#examining-the-training-curves)
+      - [Detecting whether a change is useful with isolation plots](#detecting-whether-a-change-is-useful-with-isolation-plots)
+      - [Automate generically useful plots](#automate-generically-useful-plots)
+    - [Determining whether to adopt a training pipeline change or hyperparameter configuration](#determining-whether-to-adopt-a-training-pipeline-change-or-hyperparameter-configuration)
+    - [After exploration concludes](#after-exploration-concludes)
+  - [Determining the number of steps for each training run](#determining-the-number-of-steps-for-each-training-run)
+    - [Deciding how long to train when training is *not* compute-bound](#deciding-how-long-to-train-when-training-is-not-compute-bound)
+      - [Algorithm for picking an initial candidate for max\_train\_steps using a learning rate sweep](#algorithm-for-picking-an-initial-candidate-for-max_train_steps-using-a-learning-rate-sweep)
+    - [Deciding how long to train when training is compute-bound](#deciding-how-long-to-train-when-training-is-compute-bound)
+      - [Round 1](#round-1)
+      - [Round 2](#round-2)
+  - [Additional guidance for the training pipeline](#additional-guidance-for-the-training-pipeline)
+    - [Optimizing the input pipeline](#optimizing-the-input-pipeline)
+    - [Evaluating model performance](#evaluating-model-performance)
+      - [Evaluation settings](#evaluation-settings)
+      - [Setting up periodic evaluations](#setting-up-periodic-evaluations)
+      - [Choosing a sample for periodic evaluation](#choosing-a-sample-for-periodic-evaluation)
+    - [Saving checkpoints and retrospectively selecting the best checkpoint](#saving-checkpoints-and-retrospectively-selecting-the-best-checkpoint)
+    - [Setting up experiment tracking](#setting-up-experiment-tracking)
+    - [Batch normalization implementation details](#batch-normalization-implementation-details)
+    - [Considerations for multi-host pipelines](#considerations-for-multi-host-pipelines)
+  - [FAQs](#faqs)
+    - [What is the best learning rate decay schedule family?](#what-is-the-best-learning-rate-decay-schedule-family)
+    - [Which learning rate decay should I use as a default?](#which-learning-rate-decay-should-i-use-as-a-default)
+    - [Why do some papers have complicated learning rate schedules?](#why-do-some-papers-have-complicated-learning-rate-schedules)
+    - [How should Adam’s hyperparameters be tuned?](#how-should-adams-hyperparameters-be-tuned)
+    - [Why use quasi-random search instead of more sophisticated black box optimization algorithms during the exploration phase of tuning?](#why-use-quasi-random-search-instead-of-more-sophisticated-black-box-optimization-algorithms-during-the-exploration-phase-of-tuning)
+    - [Where can I find an implementation of quasi-random search?](#where-can-i-find-an-implementation-of-quasi-random-search)
+    - [How many trials are needed to get good results with quasi-random search?](#how-many-trials-are-needed-to-get-good-results-with-quasi-random-search)
+    - [How can optimization failures be debugged and mitigated?](#how-can-optimization-failures-be-debugged-and-mitigated)
+      - [Identifying unstable workloads](#identifying-unstable-workloads)
+      - [Potential fixes for common instability patterns](#potential-fixes-for-common-instability-patterns)
+      - [Learning rate warmup](#learning-rate-warmup)
+        - [When to apply learning rate warmup](#when-to-apply-learning-rate-warmup)
+        - [How to apply learning rate warmup](#how-to-apply-learning-rate-warmup)
+      - [Gradient clipping](#gradient-clipping)
+    - [Why do you call the learning rate and other optimization parameters hyperparameters? They are not parameters of any prior distribution.](#why-do-you-call-the-learning-rate-and-other-optimization-parameters-hyperparameters-they-are-not-parameters-of-any-prior-distribution)
+    - [Why shouldn't the batch size be tuned to directly improve validation set performance?](#why-shouldnt-the-batch-size-be-tuned-to-directly-improve-validation-set-performance)
+    - [What are the update rules for all the popular optimization algorithms?](#what-are-the-update-rules-for-all-the-popular-optimization-algorithms)
+      - [Stochastic gradient descent (SGD)](#stochastic-gradient-descent-sgd)
+      - [Momentum](#momentum)
+      - [Nesterov](#nesterov)
+      - [RMSProp](#rmsprop)
+      - [ADAM](#adam)
+      - [NADAM](#nadam)
+  - [Acknowledgments](#acknowledgments)
+  - [Citing](#citing)
 
 ## Who is this document for?
 
@@ -859,8 +901,8 @@ if issues are discovered, revise the experiments and rerun them.*
         value it achieved over the course of training.
 
 <p align="center" id="figure-1">
-<img src="assets/bad_search_space.png" width="49%" alt="Example of bad search space boundaries">
-<img src="assets/good_search_space.png" width="49%" alt="Example of good search space boundaries">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/bad_search_space.png" width="49%" alt="Example of bad search space boundaries">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/good_search_space.png" width="49%" alt="Example of good search space boundaries">
 </p>
 
 <p align="center"><b>Figure 1:</b> Examples of bad search space boundaries and acceptable search space boundaries.</p>
@@ -1001,7 +1043,7 @@ failure modes and can help us prioritize what actions to take next.*
 
 
 <p align="center" id="figure-2">
-<img src="assets/isolation_plot.png" width="49%" alt="Isolation plot that investigates the best value of weight decay for ResNet-50
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/isolation_plot.png" width="49%" alt="Isolation plot that investigates the best value of weight decay for ResNet-50
 trained on ImageNet.">
 </p>
 
@@ -1776,7 +1818,7 @@ multi-host training can make it very easy to introduce bugs!*
 <br>
 
 <p align="center">
-<img src="assets/have_we_sampled_enough.png" width="49%" alt="A box plot showing the importance of sampling enough">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/have_we_sampled_enough.png" width="49%" alt="A box plot showing the importance of sampling enough">
 </p>
 
 <p align="center"><b>Figure 3:</b> A ResNet-50 was tuned on ImageNet with 100
@@ -1808,7 +1850,7 @@ important to fix them before trying other things. Diagnosing and correcting
 training failures is an active area of research.*
 
 <p align="center">
-<img src="assets/stride_instability.png" width="80%" alt="Changing the strides in a single residual block in a WideResnet results in training instability.">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/stride_instability.png" width="80%" alt="Changing the strides in a single residual block in a WideResnet results in training instability.">
 </p>
 
 
@@ -1841,7 +1883,7 @@ To check for this, we can train for an abbreviated run of just \~500 steps using
 `lr = 2 * current best`, but evaluate every step.
 
 <p align="center">
-<img src="assets/more_frequent_evals.png" width="80%" alt="Illustration of the value of more frequent evaluations at the start of
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/more_frequent_evals.png" width="80%" alt="Illustration of the value of more frequent evaluations at the start of
 training.">
 </p>
 
@@ -1872,7 +1914,7 @@ training.">
 #### Learning rate warmup
 
 <p align="center">
-<img src="assets/instability_during_warmup.png" width="80%" alt="An example of instability during a warmup period (note the horizontal axis log
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/instability_during_warmup.png" width="80%" alt="An example of instability during a warmup period (note the horizontal axis log
 scale).">
 </p>
 
@@ -1881,13 +1923,13 @@ scale).">
 ##### When to apply learning rate warmup
 
 <p align="center">
-<img src="assets/axis_model_with_instability.png" width="49%" alt="Axis plot for model with instability">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/axis_model_with_instability.png" width="49%" alt="Axis plot for model with instability">
 </p>
 
 <p align="center"><b>Figure 7a:</b> An example of a hyperparameter axis plot for a model exhibiting training instability. The best learning rate is at the edge of what is feasible. An "infeasible" trial is defined as one that either produces NaNs or uncharacteristically high values of the loss.</p>
 
 <p align="center">
-<img src="assets/loss_model_with_instability.png" width="49%" alt="Loss curve for model with instability">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/loss_model_with_instability.png" width="49%" alt="Loss curve for model with instability">
 </p>
 
 <p align="center"><b>Figure 7b:</b> The training loss of a model trained with a learning rate where we see instability.</p>
@@ -1904,7 +1946,7 @@ scale).">
 ##### How to apply learning rate warmup
 
 <p align="center">
-<img src="assets/beneficial_effect_warmup.png" width="80%" alt="Beneficial effect of warmup on training instabilities">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/beneficial_effect_warmup.png" width="80%" alt="Beneficial effect of warmup on training instabilities">
 </p>
 
 <p align="center"><b>Figure 8:</b> Beneficial effect of learning rate warmup on addressing training instabilities.</p>
@@ -1949,7 +1991,7 @@ scale).">
 #### Gradient clipping
 
 <p align="center">
-<img src="assets/gradient_clipping.png" width="80%" alt="Gradient clipping on early training instabilities">
+<img src="https://github.com/evdcush/tuning_playbook/blob/22a0935095921b957b6dd5fe177cfed345982232/assets/gradient_clipping.png" width="80%" alt="Gradient clipping on early training instabilities">
 </p>
 
 <p align="center"><b>Figure 9:</b> Illustration of gradient clipping correcting early training instability.</p>
@@ -2109,48 +2151,3 @@ $$\theta_{t+1} = \theta_{t} - \alpha_t \frac{\beta_1 m_{t+1} + (1 - \beta_1) \na
   note = {Version 1.0}
 }
 ```
-
-## Contributing
-
--   This is not an officially supported Google product.
-
--   We'd love to hear your feedback!
-
-    -   If you like the playbook, please [leave a star](https://docs.github.com/en/get-started/exploring-projects-on-github/saving-repositories-with-stars#starring-a-repository)! Or email
-        deep-learning-tuning-playbook \[at\] googlegroups.com. Testimonials help
-        us justify creating more resources like this.
-    -   If anything seems incorrect, please file an issue to start a discussion.
-        For questions or other messages where an issue isn't appropriate, please
-        open a new discussion topic on GitHub.
-
--   As discussed in the preamble, this is a living document. We anticipate
-    making periodic improvements, both small and large. If you’d like to be
-    notified, please watch our repository (see [instructions](https://docs.github.com/en/account-and-profile/managing-subscriptions-and-notifications-on-github/setting-up-notifications/configuring-notifications#configuring-your-watch-settings-for-an-individual-repository)).
-
--   Please don't file a pull request without first coordinating with the authors
-    via the issue tracking system.
-
-### Contributor License Agreement
-
-Contributions to this project must be accompanied by a Contributor License
-Agreement (CLA). You (or your employer) retain the copyright to your
-contribution; this simply gives us permission to use and redistribute your
-contributions as part of the project. Head over to
-<https://cla.developers.google.com/> to see your current agreements on file or
-to sign a new one.
-
-You generally only need to submit a CLA once, so if you've already submitted one
-(even if it was for a different project), you probably don't need to do it
-again.
-
-### Code Reviews
-
-All submissions, including submissions by project members, require review. We
-use GitHub pull requests for this purpose. Consult
-[GitHub Help](https://help.github.com/articles/about-pull-requests/) for more
-information on using pull requests.
-
-### Community Guidelines
-
-This project follows
-[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
